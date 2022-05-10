@@ -1,12 +1,13 @@
 package com.werther.server;
 
 import org.bson.Document;
+import org.bson.types.ObjectId;
 
 import java.time.LocalDateTime;
 
 public class OrderInQueue implements Order {
-    private final String client;
-    private String worker;
+    private final ObjectId client;
+    private ObjectId worker;
 
     private final LocalDateTime createdOn;
     private LocalDateTime startTime;
@@ -16,7 +17,7 @@ public class OrderInQueue implements Order {
 
     private final String link;
 
-    public OrderInQueue(String client, String link, int priority) {
+    public OrderInQueue(ObjectId client, String link, int priority) {
         this.client = client;
         this.link = link;
         this.priority = priority;
@@ -25,12 +26,12 @@ public class OrderInQueue implements Order {
     }
 
     @Override
-    public String getClient() {
+    public ObjectId getClient() {
         return client;
     }
 
     @Override
-    public String getWorker() {
+    public ObjectId getWorker() {
         return worker;
     }
 
@@ -44,7 +45,7 @@ public class OrderInQueue implements Order {
         return createdOn;
     }
 
-    public void setWorker(String worker) {
+    public void setWorker(ObjectId worker) {
         this.worker = worker;
     }
 

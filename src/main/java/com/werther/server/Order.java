@@ -1,13 +1,14 @@
 package com.werther.server;
 
 import org.bson.Document;
+import org.bson.types.ObjectId;
 
 import java.time.LocalDateTime;
 
 public interface Order {
-    String getClient();
+    ObjectId getClient();
 
-    String getWorker();
+    ObjectId getWorker();
 
     String getLink();
 

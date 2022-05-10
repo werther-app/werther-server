@@ -5,6 +5,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Sorts;
 import org.bson.Document;
+import org.bson.types.ObjectId;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -23,9 +24,10 @@ public class OrderController {
     public String order(@RequestParam(value = "video") String url,
             @RequestParam(value = "id") String client) {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
+            ObjectId clientOid = new ObjectId(client);
             MongoDatabase db = mongoClient.getDatabase("werther");
             // register order in queue
-            return registerOrder(db, client, url);
+            return registerOrder(db, clientOid, url);
         }
     }
 
@@ -35,11 +37,14 @@ public class OrderController {
     public String result(@RequestParam(value = "order") String order,
             @RequestParam(value = "id") String client) {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
+            ObjectId orderOid = new ObjectId(order);
+            ObjectId clientOid = new ObjectId(client);
             MongoDatabase db = mongoClient.getDatabase("werther");
 
             // first, check order in queue, because queue is smaller
             MongoCollection<Document> queue = db.getCollection("ordersQueue");
-            Document orderInQueue = queue.find(eq("_id", order)).first();
+            Document orderInQueueQuery = new Document("_id", orderOid).append("client", clientOid);
+            Document orderInQueue = queue.find(orderInQueueQuery).first();
 
             if (orderInQueue != null) {
                 // if order in queue check it's status
@@ -58,7 +63,8 @@ public class OrderController {
             } else {
                 // if order not in queue, maybe it's completed, let's check
                 MongoCollection<Document> completed = db.getCollection("ordersCompleted");
-                Document orderCompleted = completed.find(eq("_id", order)).first();
+                Document orderCompletedQuery = new Document("_id", orderOid).append("client", clientOid);
+                Document orderCompleted = completed.find(orderCompletedQuery).first();
 
                 if (orderCompleted == null) {
                     // if order not completed, that means requested id is wrong
@@ -72,7 +78,7 @@ public class OrderController {
                     if (result == null) {
                         // if result has timed out, restart job for this request
                         // tell user, that we are still working
-                        registerOrder(db, client, orderCompleted.get("url").toString());
+                        registerOrder(db, clientOid, orderCompleted.get("url").toString());
                         throw new ResponseStatusException(
                                 HttpStatus.ACCEPTED, "Working");
                     } else {
@@ -108,7 +114,7 @@ public class OrderController {
     // register order functionality uses when client submits order
     // and when client tries to get result of timed out order
     // so this functionality needed as separate method
-    private String registerOrder(MongoDatabase db, String client, String url) {
+    private String registerOrder(MongoDatabase db, ObjectId client, String url) {
         MongoCollection<Document> queue = db.getCollection("ordersQueue");
         int priority = calculatePriority(queue);
 
@@ -129,10 +135,10 @@ public class OrderController {
 
             if (worker != null) {
                 // get worker id
-                String workerId = worker.get("_id").toString();
+                ObjectId workerOid = (ObjectId) worker.get("_id");
 
                 // update order object and convert in to document
-                newOrder.setWorker(workerId);
+                newOrder.setWorker(workerOid);
                 Document newDocument = newOrder.toDocument();
 
                 // create update query
