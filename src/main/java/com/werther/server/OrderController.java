@@ -4,8 +4,11 @@ import com.mongodb.MongoClient;
 import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 import com.mongodb.client.model.Sorts;
+import com.mongodb.util.JSON;
+
 import org.bson.Document;
 import org.bson.types.ObjectId;
+import org.json.JSONArray;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -17,7 +20,6 @@ import static com.mongodb.client.model.Filters.eq;
 
 @RestController
 public class OrderController {
-
     // accepts url for order and returns id of order
     // in future client will ask for order by it's id rather than url
     @PostMapping("/order")
@@ -34,7 +36,7 @@ public class OrderController {
     // accepts order id and tells about order status, or
     // maybe returns result of order computing, if we have it
     @GetMapping("/result")
-    public String result(@RequestParam(value = "order") String order,
+    public JSONArray result(@RequestParam(value = "order") String order,
             @RequestParam(value = "id") String client) {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
             ObjectId orderOid = new ObjectId(order);
@@ -63,7 +65,8 @@ public class OrderController {
             } else {
                 // if order not in queue, maybe it's completed, let's check
                 MongoCollection<Document> completed = db.getCollection("ordersCompleted");
-                Document orderCompletedQuery = new Document("_id", orderOid).append("client", clientOid);
+                Document orderCompletedQuery = new Document("_id", orderOid).append("client",
+                        clientOid);
                 Document orderCompleted = completed.find(orderCompletedQuery).first();
 
                 if (orderCompleted == null) {
@@ -83,7 +86,8 @@ public class OrderController {
                                 HttpStatus.ACCEPTED, "Working");
                     } else {
                         // best scenario — return computed result
-                        return result;
+                        JSONArray jsonResult = new JSONArray(result);
+                        return jsonResult;
                     }
                 }
             }
@@ -135,7 +139,7 @@ public class OrderController {
 
             if (worker != null) {
                 // get worker id
-                ObjectId workerOid = (ObjectId) worker.get("_id");
+                ObjectId workerOid = worker.getObjectId("_id");
 
                 // update order object and convert in to document
                 newOrder.setWorker(workerOid);
@@ -148,7 +152,8 @@ public class OrderController {
                 // update order in db
                 queue.updateOne(orderDocument, updateDocument);
 
-                // TODO: sendToWorker();
+                // send order
+                ClientListener.sendOrder(workerOid.toString(), client.toString(), url);
             }
         }
 
