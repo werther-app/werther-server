@@ -35,7 +35,7 @@ public class OrderController {
 
     // accepts order id and tells about order status, or
     // maybe returns result of order computing, if we have it
-    @GetMapping("/result")
+    @GetMapping("/order")
     public JSONArray result(@RequestParam(value = "order") String order,
             @RequestParam(value = "id") String client) {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
