@@ -8,6 +8,7 @@ public class WertherServerApplication {
 
     public static void main(String[] args) {
         SpringApplication.run(WertherServerApplication.class, args);
+        WorkerSocket.run();
     }
 
 }
