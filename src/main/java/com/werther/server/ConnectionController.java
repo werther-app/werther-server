@@ -40,7 +40,7 @@ public class ConnectionController {
             collection.insertOne(connectionDocument);
 
             // return id to user
-            return connectionDocument.get("_id").toString();
+            return connectionDocument.get("_id", String.class);
         }
     }
 }
