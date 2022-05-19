@@ -18,7 +18,7 @@ import com.mongodb.client.MongoDatabase;
 import org.bson.types.ObjectId;
 import org.json.JSONObject;
 
-public class ClientListener {
+public class ClientListener extends Thread {
     private Socket socket;
 
     private BufferedReader in;
@@ -26,21 +26,46 @@ public class ClientListener {
 
     private ObjectId workerOid;
 
-    private static HashMap<String, ClientListener> clients = new HashMap<String, ClientListener>();
+    private static HashMap<ObjectId, ClientListener> clients = new HashMap<ObjectId, ClientListener>();
 
-    public ClientListener(Socket socket) throws IOException {
+    public ClientListener(Socket socket, ObjectId oid) throws IOException {
         this.socket = socket;
+        this.workerOid = oid;
 
         in = new BufferedReader(new InputStreamReader(socket.getInputStream()));
         out = new PrintWriter(new BufferedWriter(new OutputStreamWriter(socket.getOutputStream())));
+        start();
     }
 
-    public static void sendOrder(String workerId, String clientId, String url) {
+    @Override
+    public void run() {
+        while (!socket.isClosed()) {
+            try {
+                // checks if server socket contains zero client sockets
+                // that means we client disconnected,
+                // because we use server-side socket only for one client
+                if (socket.getInputStream().read() == -1) {
+                    // change state in database
+                    checkIfRegistered(workerOid);
+                    // remove client from connected map
+                    clients.remove(workerOid);
+                    // move all orders on this client to other clients
+                    redistributeOrders(workerOid);
+                    socket.close();
+                }
+            } catch (IOException e) {
+                // TODO Auto-generated catch block
+                e.printStackTrace();
+            }
+        }
+    }
+
+    public static void sendOrder(ObjectId workerOid, ObjectId clientOid, String url) {
         JSONObject order = new JSONObject();
-        order.put("id", clientId);
+        order.put("id", clientOid);
         order.put("url", url);
 
-        ClientListener workerListener = getClients().get(workerId);
+        ClientListener workerListener = getClients().get(workerOid);
         PrintWriter output = workerListener.getOutput();
         BufferedReader input = workerListener.getInput();
 
@@ -52,42 +77,40 @@ public class ClientListener {
             parseResultAndUpdateDB(result);
         } catch (IOException e) {
             try {
+                checkIfRegistered(workerOid);
                 workerListener.getSocket().close();
             } catch (IOException p) {
                 System.out.println(p);
             }
-            clients.remove(workerId);
+            clients.remove(workerOid);
+            redistributeOrders(workerOid);
         }
     }
 
-    public void waitResult() {
-        try {
-            String result = in.readLine();
-            parseResultAndUpdateDB(result);
-        } catch (IOException e) {
-            try {
-                socket.close();
-            } catch (IOException p) {
-                System.out.println(p);
-            }
-            clients.remove(workerOid.toString());
+    private static void redistributeOrders(ObjectId workerOid) {
+        try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
+            MongoDatabase db = mongoClient.getDatabase("werther");
+            MongoCollection<Document> queue = db.getCollection("ordersQueue");
+
+            OrderController.redistributeOrders(queue, workerOid);
         }
     }
 
     private static void parseResultAndUpdateDB(String result) {
         JSONObject jsonResult = new JSONObject(result);
-        String orderId = jsonResult.get("id").toString();
+        ObjectId orderOid = new ObjectId(jsonResult.get("id").toString());
         String code = jsonResult.getString("result").toString();
         String endTime = jsonResult.get("endTime").toString();
-        updateDBOrder(new ObjectId(orderId), code, endTime);
+        updateDBOrder(orderOid, code, endTime);
     }
 
-    public static String processLogin(String id) {
-        String sync = updateDBState(new ObjectId(id), "connected");
-        return sync;
+    // maybe in future we will need to do more actions in login processing
+    // rather than just checking in db, so we need this method
+    public static Boolean processLogin(ObjectId oid) {
+        return checkIfRegistered(oid);
     }
 
-    public static HashMap<String, ClientListener> getClients() {
+    public static HashMap<ObjectId, ClientListener> getClients() {
         return clients;
     }
 
@@ -116,11 +139,11 @@ public class ClientListener {
             Document order = queue.find(query).first();
 
             if (order != null) {
-                ObjectId client = order.getObjectId("client");
-                ObjectId worker = order.getObjectId("worker");
-                String createdOn = order.get("createdOn").toString();
-                String startTime = order.get("startTime").toString();
-                String link = order.get("link").toString();
+                ObjectId client = order.get("client", ObjectId.class);
+                ObjectId worker = order.get("worker", ObjectId.class);
+                String createdOn = order.get("createdOn", String.class);
+                String startTime = order.get("startTime", String.class);
+                String link = order.get("link", String.class);
 
                 OrderCompleted completed = new OrderCompleted(client, worker, createdOn, startTime, link, code);
 
@@ -133,40 +156,20 @@ public class ClientListener {
         }
     }
 
-    public static String updateDBState(ObjectId oid, String state) {
+    public static Boolean checkIfRegistered(ObjectId oid) {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
             MongoDatabase db = mongoClient.getDatabase("werther");
             MongoCollection<Document> workers = db.getCollection("workers");
 
-            // find worker to update
+            // find worker
             Document query = new Document();
             query.put("_id", oid);
             Document workerDocument = workers.find(query).first();
 
             if (workerDocument != null) {
-                // create new proper worker
-                Worker updateWorker = new Worker();
-                switch (state) {
-                    case "connected":
-                        updateWorker.setConnection(true);
-                        break;
-                    case "disconnected":
-                        updateWorker.setConnection(false);
-                        break;
-                }
-                Document newWorkerDocument = updateWorker.toDocument();
-                newWorkerDocument.put("_id", oid);
-
-                // create update query
-                Document updateWorkerDocument = new Document();
-                updateWorkerDocument.put("$set", newWorkerDocument);
-
-                // update worker
-                workers.updateOne(workerDocument, updateWorkerDocument);
-
-                return "OK";
+                return true;
             } else {
-                return "BAD";
+                return false;
             }
         }
     }
