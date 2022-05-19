@@ -45,18 +45,24 @@ public class ClientListener extends Thread {
                 // that means we client disconnected,
                 // because we use server-side socket only for one client
                 if (socket.getInputStream().read() == -1) {
-                    // change state in database
-                    checkIfRegistered(workerOid);
-                    // remove client from connected map
-                    clients.remove(workerOid);
-                    // move all orders on this client to other clients
-                    redistributeOrders(workerOid);
-                    socket.close();
+                    closeConnection(workerOid, socket);
                 }
             } catch (IOException e) {
                 // TODO Auto-generated catch block
                 e.printStackTrace();
             }
+        }
+    }
+
+    public static void closeConnection(ObjectId workerOid, Socket socket) {
+        // remove client from connected map
+        clients.remove(workerOid);
+        // move all orders on this client to other clients
+        redistributeOrders(workerOid);
+        try {
+            socket.close();
+        } catch (IOException e) {
+            e.printStackTrace();
         }
     }
 
@@ -76,14 +82,7 @@ public class ClientListener extends Thread {
             String result = input.readLine();
             parseResultAndUpdateDB(result);
         } catch (IOException e) {
-            try {
-                checkIfRegistered(workerOid);
-                workerListener.getSocket().close();
-            } catch (IOException p) {
-                System.out.println(p);
-            }
-            clients.remove(workerOid);
-            redistributeOrders(workerOid);
+            closeConnection(workerOid, workerListener.getSocket());
         }
     }
 
