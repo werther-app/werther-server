@@ -7,6 +7,9 @@ import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.io.PrintWriter;
 import java.net.Socket;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.util.Date;
 import java.util.HashMap;
 
 import org.bson.Document;
@@ -16,6 +19,7 @@ import com.mongodb.client.MongoCollection;
 import com.mongodb.client.MongoDatabase;
 
 import org.bson.types.ObjectId;
+import org.json.JSONArray;
 import org.json.JSONObject;
 
 public class ClientListener extends Thread {
@@ -66,10 +70,11 @@ public class ClientListener extends Thread {
         }
     }
 
-    public static void sendOrder(ObjectId workerOid, ObjectId clientOid, String url) {
-        JSONObject order = new JSONObject();
-        order.put("id", clientOid);
-        order.put("url", url);
+    public static void sendOrder(ObjectId workerOid, ObjectId clientOid, ObjectId orderOid, String link) {
+        JSONObject order = new JSONObject()
+                .put("id", orderOid)
+                .put("client", clientOid)
+                .put("link", link);
 
         ClientListener workerListener = getClients().get(workerOid);
         PrintWriter output = workerListener.getOutput();
@@ -98,8 +103,8 @@ public class ClientListener extends Thread {
     private static void parseResultAndUpdateDB(String result) {
         JSONObject jsonResult = new JSONObject(result);
         ObjectId orderOid = new ObjectId(jsonResult.get("id").toString());
-        String code = jsonResult.getString("result").toString();
-        String endTime = jsonResult.get("endTime").toString();
+        JSONArray code = jsonResult.getJSONArray("result");
+        LocalDateTime endTime = LocalDateTime.parse(jsonResult.get("endTime").toString());
         updateDBOrder(orderOid, code, endTime);
     }
 
@@ -129,7 +134,7 @@ public class ClientListener extends Thread {
         this.socket = socket;
     }
 
-    public static void updateDBOrder(ObjectId orderId, String code, String endTime) {
+    public static void updateDBOrder(ObjectId orderId, JSONArray code, LocalDateTime endTime) {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
             MongoDatabase db = mongoClient.getDatabase("werther");
             MongoCollection<Document> queue = db.getCollection("ordersQueue");
@@ -140,14 +145,24 @@ public class ClientListener extends Thread {
             if (order != null) {
                 ObjectId client = order.get("client", ObjectId.class);
                 ObjectId worker = order.get("worker", ObjectId.class);
-                String createdOn = order.get("createdOn", String.class);
-                String startTime = order.get("startTime", String.class);
+
+                LocalDateTime createdOn = order.get("createdOn", Date.class)
+                        .toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDateTime();
+                LocalDateTime startTime = order.get("startTime", Date.class)
+                        .toInstant()
+                        .atZone(ZoneId.systemDefault())
+                        .toLocalDateTime();
+
                 String link = order.get("link", String.class);
 
-                OrderCompleted completed = new OrderCompleted(client, worker, createdOn, startTime, link, code);
+                OrderCompleted completed = new OrderCompleted(client, worker, createdOn, startTime, endTime, link,
+                        code);
 
                 Document completedDocument = completed.toDocument();
-                MongoCollection<Document> ordersCompleted = db.getCollection("ordersQueue");
+                completedDocument.put("_id", orderId);
+                MongoCollection<Document> ordersCompleted = db.getCollection("ordersCompleted");
                 ordersCompleted.insertOne(completedDocument);
 
                 queue.deleteOne(query);
