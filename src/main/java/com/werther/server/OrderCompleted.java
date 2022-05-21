@@ -18,17 +18,17 @@ public class OrderCompleted implements Order {
     private final JSONArray result;
 
     public OrderCompleted(ObjectId client, ObjectId worker,
-            String createdOn, String startTime,
-            String link, String result) {
+            LocalDateTime createdOn, LocalDateTime startTime, LocalDateTime endTime,
+            String link, JSONArray result) {
         this.client = client;
         this.worker = worker;
 
-        this.createdOn = LocalDateTime.parse(createdOn);
-        this.startTime = LocalDateTime.parse(startTime);
-        this.endTime = LocalDateTime.now();
+        this.createdOn = createdOn;
+        this.startTime = startTime;
+        this.endTime = endTime;
 
         this.link = link;
-        this.result = new JSONArray(result);
+        this.result = result;
     }
 
     @Override
