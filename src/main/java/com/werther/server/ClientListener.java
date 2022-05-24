@@ -101,11 +101,17 @@ public class ClientListener extends Thread {
     }
 
     private static void parseResultAndUpdateDB(String result) {
+        String status;
         JSONObject jsonResult = new JSONObject(result);
         ObjectId orderOid = new ObjectId(jsonResult.get("id").toString());
         JSONArray code = jsonResult.getJSONArray("result");
         LocalDateTime endTime = LocalDateTime.parse(jsonResult.get("endTime").toString());
-        updateDBOrder(orderOid, code, endTime);
+        if (code.length() == 0) {
+            status = "error";
+        } else {
+            status = "completed";
+        }
+        updateDBOrder(orderOid, code, endTime, status);
     }
 
     // maybe in future we will need to do more actions in login processing
@@ -134,7 +140,7 @@ public class ClientListener extends Thread {
         this.socket = socket;
     }
 
-    public static void updateDBOrder(ObjectId orderId, JSONArray code, LocalDateTime endTime) {
+    public static void updateDBOrder(ObjectId orderId, JSONArray code, LocalDateTime endTime, String status) {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
             MongoDatabase db = mongoClient.getDatabase("werther");
             MongoCollection<Document> queue = db.getCollection("ordersQueue");
@@ -157,7 +163,8 @@ public class ClientListener extends Thread {
 
                 String link = order.get("link", String.class);
 
-                OrderCompleted completed = new OrderCompleted(client, worker, createdOn, startTime, endTime, link,
+                OrderCompleted completed = new OrderCompleted(client, worker, createdOn, startTime, endTime, status,
+                        link,
                         code);
 
                 Document completedDocument = completed.toDocument();
