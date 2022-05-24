@@ -29,8 +29,16 @@ public class OrderController {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
             ObjectId clientOid = new ObjectId(client);
             MongoDatabase db = mongoClient.getDatabase("werther");
-            // register order in queue
-            return registerOrder(db, clientOid, link);
+            MongoCollection<Document> clients = db.getCollection("clients");
+
+            // check client auth
+            if (isClientAuthed(clients, clientOid)) {
+                // register order in queue
+                return registerOrder(db, clientOid, link);
+            } else {
+                throw new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "Wrong client id");
+            }
         }
     }
 
@@ -50,8 +58,8 @@ public class OrderController {
             Document orderInQueue = queue.find(orderInQueueQuery).first();
 
             if (orderInQueue != null) {
-                    throw new ResponseStatusException(
-                            HttpStatus.ACCEPTED, "Working");
+                throw new ResponseStatusException(
+                        HttpStatus.ACCEPTED, "Working");
             } else {
                 // if order not in queue, maybe it's completed, let's check
                 MongoCollection<Document> completed = db.getCollection("ordersCompleted");
@@ -69,28 +77,37 @@ public class OrderController {
 
                     if (status.equals("completed")) {
                         // if completed, get result
-                    String result = orderCompleted.get("result", String.class);
-                    // but result can be timed out
-                    if (result == null) {
-                        // if result has timed out, restart job for this request
-                        // tell user, that we are still working
-                        registerOrder(db, clientOid, orderCompleted.get("link", String.class));
-                        throw new ResponseStatusException(
-                                HttpStatus.ACCEPTED, "Working");
-                    } else {
-                        // best scenario — return computed result
-                        JSONArray jsonResult = new JSONArray(result);
-                        return jsonResult;
-                    }
+                        String result = orderCompleted.get("result", String.class);
+                        // but result can be timed out
+                        if (result == null) {
+                            // if result has timed out, restart job for this request
+                            // tell user, that we are still working
+                            registerOrder(db, clientOid, orderCompleted.get("link", String.class));
+                            throw new ResponseStatusException(
+                                    HttpStatus.ACCEPTED, "Working");
+                        } else {
+                            // best scenario — return computed result
+                            JSONArray jsonResult = new JSONArray(result);
+                            return jsonResult;
+                        }
                     } else {
                         // if status is error, return error
                         throw new ResponseStatusException(
                                 HttpStatus.NOT_FOUND, "Error");
+                    }
                 }
-            }
             }
         }
     }
+
+    private static Boolean isClientAuthed(MongoCollection<Document> clients, ObjectId client) {
+        Document query = new Document("_id", client);
+        Document result = clients.find(query).first();
+
+        if (result != null) {
+            return true;
+        } else {
+            return false;
         }
     }
 
