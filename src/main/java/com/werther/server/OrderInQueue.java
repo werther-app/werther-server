@@ -45,6 +45,11 @@ public class OrderInQueue implements Order {
         return createdOn;
     }
 
+    @Override
+    public String getStatus() {
+        return status;
+    }
+
     public void setWorker(ObjectId worker) {
         this.worker = worker;
     }
@@ -53,14 +58,11 @@ public class OrderInQueue implements Order {
         this.startTime = startTime;
     }
 
-    public String getStatus() {
-        return status;
-    }
-
     public void setStatus(String status) {
         this.status = status;
     }
 
+    @Override
     public Document toDocument() {
         Document order = new Document();
         order.put("client", this.client);

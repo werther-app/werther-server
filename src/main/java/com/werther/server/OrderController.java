@@ -50,19 +50,8 @@ public class OrderController {
             Document orderInQueue = queue.find(orderInQueueQuery).first();
 
             if (orderInQueue != null) {
-                // if order in queue check it's status
-                String status = orderInQueue.get("status", String.class);
-
-                if (status.equals("accepted") || status.equals("working")) {
-                    // status might be accepted or working,
-                    // that means we want for client to wait more time
                     throw new ResponseStatusException(
                             HttpStatus.ACCEPTED, "Working");
-                } else {
-                    // but also status might be different, that means error, no matter what type
-                    throw new ResponseStatusException(
-                            HttpStatus.NOT_FOUND, "Error");
-                }
             } else {
                 // if order not in queue, maybe it's completed, let's check
                 MongoCollection<Document> completed = db.getCollection("ordersCompleted");
@@ -75,9 +64,12 @@ public class OrderController {
                     throw new ResponseStatusException(
                             HttpStatus.BAD_REQUEST, "Wrong order id");
                 } else {
-                    // else get result
-                    String result = orderCompleted.get("result", String.class);
+                    // else check status, there might be error
+                    String status = orderCompleted.get("status", String.class);
 
+                    if (status.equals("completed")) {
+                        // if completed, get result
+                    String result = orderCompleted.get("result", String.class);
                     // but result can be timed out
                     if (result == null) {
                         // if result has timed out, restart job for this request
@@ -90,8 +82,15 @@ public class OrderController {
                         JSONArray jsonResult = new JSONArray(result);
                         return jsonResult;
                     }
+                    } else {
+                        // if status is error, return error
+                        throw new ResponseStatusException(
+                                HttpStatus.NOT_FOUND, "Error");
                 }
             }
+            }
+        }
+    }
         }
     }
 

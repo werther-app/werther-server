@@ -14,5 +14,7 @@ public interface Order {
 
     LocalDateTime getCreatedOn();
 
+    String getStatus();
+
     Document toDocument();
 }

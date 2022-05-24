@@ -14,11 +14,12 @@ public class OrderCompleted implements Order {
     private final LocalDateTime startTime;
     private final LocalDateTime endTime;
 
+    private final String status;
     private final String link;
     private final JSONArray result;
 
     public OrderCompleted(ObjectId client, ObjectId worker,
-            LocalDateTime createdOn, LocalDateTime startTime, LocalDateTime endTime,
+            LocalDateTime createdOn, LocalDateTime startTime, LocalDateTime endTime, String status,
             String link, JSONArray result) {
         this.client = client;
         this.worker = worker;
@@ -27,6 +28,7 @@ public class OrderCompleted implements Order {
         this.startTime = startTime;
         this.endTime = endTime;
 
+        this.status = status;
         this.link = link;
         this.result = result;
     }
@@ -51,6 +53,12 @@ public class OrderCompleted implements Order {
         return createdOn;
     }
 
+    @Override
+    public String getStatus() {
+        return status;
+    }
+
+    @Override
     public Document toDocument() {
         Document order = new Document();
         order.put("client", this.client);
