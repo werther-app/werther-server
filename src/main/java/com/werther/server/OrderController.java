@@ -113,7 +113,7 @@ public class OrderController {
 
     // select no matter what worker with connection
     // useful when we sure that all online workers are free
-    private static ObjectId selectOnlineWorker(MongoCollection<Document> workers) {
+    private static ObjectId selectOnlineWorker() {
         ObjectId[] oids = ClientListener.getClients().keySet().toArray(new ObjectId[0]);
         if (oids.length != 0) {
             return oids[0];
@@ -153,14 +153,10 @@ public class OrderController {
         // …if queue was empty we sure that no working in progress
         // because orders in progress also located in queue
         if (isQueueEmpty) {
-            MongoCollection<Document> workers = db.getCollection("workers");
             // so we can get random online worker
-            ObjectId workerOid = selectOnlineWorker(workers);
+            ObjectId workerOid = selectOnlineWorker();
 
             if (workerOid != null) {
-                // get worker id
-                // ObjectId workerOid = worker.getObjectId("_id");
-
                 distributeOrder(queue, orderOid, workerOid);
             }
         }
