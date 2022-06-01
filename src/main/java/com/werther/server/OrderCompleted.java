@@ -68,6 +68,7 @@ public class OrderCompleted implements Order {
         order.put("endTime", this.endTime);
         order.put("link", this.link);
         order.put("result", this.result);
+        order.put("status", this.status);
         return order;
     }
 }
