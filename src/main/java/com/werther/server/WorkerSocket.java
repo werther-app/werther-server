@@ -49,7 +49,7 @@ public class WorkerSocket {
 
                                 Document order = OrderController.selectOrder(queue);
 
-                                if (OrderController.selectOrder(queue) != null) {
+                                if (order != null) {
                                     ObjectId orderOid = order.get("_id", ObjectId.class);
                                     OrderController.distributeOrder(queue, orderOid, oid);
                                 }
