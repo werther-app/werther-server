@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 
 @RestController
 public class OrderController {
@@ -77,9 +78,11 @@ public class OrderController {
 
                     if (status.equals("completed")) {
                         // if completed, get result
-                        String result = orderCompleted.get("result", String.class);
+                        @SuppressWarnings("unchecked")
+                        ArrayList<String> nullableResult = (ArrayList<String>) orderCompleted.get("result");
+
                         // but result can be timed out
-                        if (result == null) {
+                        if (nullableResult == null) {
                             // if result has timed out, restart job for this request
                             // tell user, that we are still working
                             registerOrder(db, clientOid, orderCompleted.get("link", String.class));
@@ -87,8 +90,8 @@ public class OrderController {
                                     HttpStatus.ACCEPTED, "Working");
                         } else {
                             // best scenario — return computed result
-                            JSONArray jsonResult = new JSONArray(result);
-                            return jsonResult;
+                            JSONArray result = new JSONArray(nullableResult);
+                            return result;
                         }
                     } else {
                         // if status is error, return error
@@ -193,13 +196,25 @@ public class OrderController {
         return order;
     }
 
+    public static Bson resetOrder() {
+        Bson resetOrder = Updates.combine(
+                Updates.set("status", "accepted"),
+                Updates.set("startTime", null));
+        return resetOrder;
+    }
+
+    public static Bson resetWorker() {
+        Bson resetWorker = Updates.set("worker", null);
+        return resetWorker;
+    }
+
     public static void redistributeOrders(MongoCollection<Document> queue, ObjectId workerOid) {
         Document query = new Document("worker", workerOid);
 
-        Bson updates = Updates.combine(
-                Updates.set("worker", null),
-                Updates.set("status", "accepted"));
+        Bson resetOrder = resetOrder();
+        Bson resetWorker = resetWorker();
 
-        queue.updateMany(query, updates);
+        queue.updateMany(query, resetWorker);
+        queue.updateMany(query, resetOrder);
     }
 }
