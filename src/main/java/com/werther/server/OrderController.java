@@ -18,6 +18,7 @@ import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 
 @RestController
 public class OrderController {
@@ -50,8 +51,8 @@ public class OrderController {
             Document orderInQueue = queue.find(orderInQueueQuery).first();
 
             if (orderInQueue != null) {
-                    throw new ResponseStatusException(
-                            HttpStatus.ACCEPTED, "Working");
+                throw new ResponseStatusException(
+                        HttpStatus.ACCEPTED, "Working");
             } else {
                 // if order not in queue, maybe it's completed, let's check
                 MongoCollection<Document> completed = db.getCollection("ordersCompleted");
@@ -69,28 +70,28 @@ public class OrderController {
 
                     if (status.equals("completed")) {
                         // if completed, get result
-                    String result = orderCompleted.get("result", String.class);
-                    // but result can be timed out
-                    if (result == null) {
-                        // if result has timed out, restart job for this request
-                        // tell user, that we are still working
-                        registerOrder(db, clientOid, orderCompleted.get("link", String.class));
-                        throw new ResponseStatusException(
-                                HttpStatus.ACCEPTED, "Working");
-                    } else {
-                        // best scenario — return computed result
-                        JSONArray jsonResult = new JSONArray(result);
-                        return jsonResult;
-                    }
+                        @SuppressWarnings("unchecked")
+                        ArrayList<String> nullableResult = (ArrayList<String>) orderCompleted.get("result");
+
+                        // but result can be timed out
+                        if (nullableResult == null) {
+                            // if result has timed out, restart job for this request
+                            // tell user, that we are still working
+                            registerOrder(db, clientOid, orderCompleted.get("link", String.class));
+                            throw new ResponseStatusException(
+                                    HttpStatus.ACCEPTED, "Working");
+                        } else {
+                            // best scenario — return computed result
+                            JSONArray result = new JSONArray(nullableResult);
+                            return result;
+                        }
                     } else {
                         // if status is error, return error
                         throw new ResponseStatusException(
                                 HttpStatus.NOT_FOUND, "Error");
+                    }
                 }
             }
-            }
-        }
-    }
         }
     }
 
