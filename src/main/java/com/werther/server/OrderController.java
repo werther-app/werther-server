@@ -177,13 +177,25 @@ public class OrderController {
         return order;
     }
 
+    public static Bson resetOrder() {
+        Bson resetOrder = Updates.combine(
+                Updates.set("status", "accepted"),
+                Updates.set("startTime", null));
+        return resetOrder;
+    }
+
+    public static Bson resetWorker() {
+        Bson resetWorker = Updates.set("worker", null);
+        return resetWorker;
+    }
+
     public static void redistributeOrders(MongoCollection<Document> queue, ObjectId workerOid) {
         Document query = new Document("worker", workerOid);
 
-        Bson updates = Updates.combine(
-                Updates.set("worker", null),
-                Updates.set("status", "accepted"));
+        Bson resetOrder = resetOrder();
+        Bson resetWorker = resetWorker();
 
-        queue.updateMany(query, updates);
+        queue.updateMany(query, resetWorker);
+        queue.updateMany(query, resetOrder);
     }
 }
