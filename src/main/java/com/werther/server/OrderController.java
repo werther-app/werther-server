@@ -30,8 +30,16 @@ public class OrderController {
         try (MongoClient mongoClient = new MongoClient("localhost", 27017)) {
             ObjectId clientOid = new ObjectId(client);
             MongoDatabase db = mongoClient.getDatabase("werther");
-            // register order in queue
-            return registerOrder(db, clientOid, link);
+            MongoCollection<Document> clients = db.getCollection("clients");
+
+            // check client auth
+            if (isClientAuthed(clients, clientOid)) {
+                // register order in queue
+                return registerOrder(db, clientOid, link);
+            } else {
+                throw new ResponseStatusException(
+                        HttpStatus.UNAUTHORIZED, "Wrong client id");
+            }
         }
     }
 
@@ -92,6 +100,17 @@ public class OrderController {
                     }
                 }
             }
+        }
+    }
+
+    private static Boolean isClientAuthed(MongoCollection<Document> clients, ObjectId client) {
+        Document query = new Document("_id", client);
+        Document result = clients.find(query).first();
+
+        if (result != null) {
+            return true;
+        } else {
+            return false;
         }
     }
 
